@@ -1,6 +1,7 @@
 import argparse
 import json
 import os
+import queue
 import shutil
 import requests
 import gutenberg_list_builder
@@ -9,7 +10,7 @@ import time
 from multiprocessing import Process, Queue
 
 
-def download_and_parse_books(q_in, q_out):
+def download_and_parse_books(q_in, q_out, num):
     while not q_in.empty():
         book = q_in.get()
         try:
@@ -17,7 +18,8 @@ def download_and_parse_books(q_in, q_out):
             s = text_stripper.TextStripper(r.text)
             q_out.put(s.strip_plaintext())
         except Exception as e:
-            print("[!] Could not load {}".format(book))
+            print("[!] Process {} could not load {}!".format(num, book))
+    return
 
 
 def write_output(outfile_name, words):
@@ -25,16 +27,16 @@ def write_output(outfile_name, words):
     occurrences = 0
     with open(outfile_name, "w") as outfile:
         outfile.write("word,books,occurrences")
-        for word in words:
-            outfile.write("\n{},{},{}".format(word["word"], word["books"], word["count"]))
+        for word in words.keys():
+            outfile.write("\n{},{},{}".format(words[word]["word"], words[word]["books"], words[word]["count"]))
             unique += 1
-            occurrences += word["count"]
+            occurrences += words[word]["count"]
     return unique, occurrences
 
 
 def words_from_book(book_text=""):
     words = {}
-    for word in book_text:
+    for word in book_text.split():
         word = word.lower()
         if word not in words.keys():
             words[word] = {"word": word, "books": 1, "count": 1}
@@ -47,7 +49,7 @@ def merge_word_dict_into(target, source):
     for word in source.keys():
         if word in target.keys():
             target[word]["books"] += 1
-            target[word]["count"] += word["count"]
+            target[word]["count"] += source[word]["count"]
         else:
             target[word] = source[word]
     return target
@@ -133,40 +135,41 @@ def main():
     words_queue = Queue()
     processes = []
     words = {}
-    books_count = 0
     print("[+] Preliminary operations done.")
-    if args.url == "":
+    if args.urls == "":
         print("[+] Building a list of Project Gutenberg books.")
         list_builder = gutenberg_list_builder.GutenbergListBuilder()
         books_list = list_builder.build()
         print("[+] {} books listed from Project Gutenberg.".format(len(books_list)))
     else:
-        print("[+] Reading URL list from {}.".format(args.url))
-        with open(args.url, "r") as infile:
-            books_list = json.read(infile)
-    print("[+] Queueing books.")
-    print("Queueing books...")
+        print("[+] Reading URL list from {}.".format(args.urls))
+        with open(args.urls, "r") as infile:
+            books_list = json.load(infile)
+    books_count = len(books_list)
+    print("[+] Enqueueing books.", end="", flush=True)
     for book in books_list:
         if book["language"].lower() == "english":
             books_queue.put(book["book"])
-            books_count += 1
+            print(".", end="", flush=True)
+    print("\n[+] Books enqueued.")
     print("[+] Spawning download processes.")
     for i in range(args.processes):
-        proc = Process(target=download_and_parse_books, args=(books_queue, words_queue))
+        proc = Process(target=download_and_parse_books, args=(books_queue, words_queue, i))
         processes.append(proc)
         proc.start()
-    print("[+] Counting and merging words.")
+    print("[+] Download processes spawned.")
+    print("[+] Counting and merging words.", end="", flush=True)
     try:
         while True:
-            book_words = words_from_book(words_queue.get(block=True, timeout=20))
+            book_words = words_from_book(words_queue.get(block=True, timeout=10))
             words = merge_word_dict_into(words, book_words)
-    except:
-        print("[!] Queue empty!")
-    print("[+] Closing download processes.")
-    for proc in processes:
-        proc.join()
+            print(".", end="", flush=True)
+    except queue.Empty:
+        print("\n[!] Queue empty!")
+    except Exception as e:
+        print("\n[!] Error while counting and merging words! {}".format(e))
     print("[+] Writing results.")
-    unique, occurrences = (outfile_name, words)
+    unique, occurrences = write_output(outfile_name, words)
     print("[+] Classified {} occurrences of {} unique words from {} books.".format(occurrences, unique, books_count))
     print("[+] Cleaning up any previous word list files and directories")
     remove_pattern_dir()
@@ -177,6 +180,10 @@ def main():
     print("[+] Saving the patterns to disk.")
     save_pattern_map(patterns)
     print("[+] Word list built.")
+    print("[+] Closing processes.")
+    for proc in processes:
+        proc.join()
+    print("[+] Processes closed.")
     time_end = time.time()
     print("[+] Setup finished in {} seconds.".format(time_end - time_start))
 
