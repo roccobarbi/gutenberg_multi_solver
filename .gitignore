@@ -1,2 +1,6 @@
 .idea/
 patterns/
+__pycache__/
+*.txt
+*.json
+*.yaml

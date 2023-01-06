@@ -123,6 +123,7 @@ def main():
     argument_parser.add_argument("-p", "--processes", type=int, default=1, help="Number of max processes (default 1).")
     argument_parser.add_argument("-o", "--out", type=str, default=None, help="Optional name of the output file.")
     argument_parser.add_argument("-l", "--language", type=str, default="english", help="Optional language.")
+    argument_parser.add_argument("-u", "--urls", type=str, default="", help="Optional file with list of urls")
     args = argument_parser.parse_args()
     if args.out is None:
         outfile_name = "out_gutenberg_" + str(int(time.time())) + ".txt"
@@ -134,10 +135,15 @@ def main():
     words = {}
     books_count = 0
     print("[+] Preliminary operations done.")
-    print("[+] Building a list of Project Gutenberg books.")
-    list_builder = gutenberg_list_builder.GutenbergListBuilder()
-    books_list = list_builder.build()
-    print("[+] {} books listed from Project Gutenberg.".format(len(books_list)))
+    if args.url == "":
+        print("[+] Building a list of Project Gutenberg books.")
+        list_builder = gutenberg_list_builder.GutenbergListBuilder()
+        books_list = list_builder.build()
+        print("[+] {} books listed from Project Gutenberg.".format(len(books_list)))
+    else:
+        print("[+] Reading URL list from {}.".format(args.url))
+        with open(args.url, "r") as infile:
+            books_list = json.read(infile)
     print("[+] Queueing books.")
     print("Queueing books...")
     for book in books_list:
