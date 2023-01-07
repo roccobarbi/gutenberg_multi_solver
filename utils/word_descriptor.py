@@ -1,3 +1,18 @@
+def generate_pattern_from_any_word(word, alphabet="abcdefghijklmnopqrstuvwxyz"):
+    char_map = {}
+    pattern = ""
+    unique = 0
+    for char in word:
+        if char in ['\'', '-']:
+            pattern += char
+        else:
+            if char not in char_map.keys():
+                char_map[char] = unique
+                unique += 1
+            pattern += alphabet[char_map[char]]
+    return pattern, unique
+
+
 class WordDescriptor:
     """
     Class to describe a word and its properties, relative to a wordlist compiled from the internet.
