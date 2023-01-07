@@ -18,7 +18,11 @@ class GutenbergListBuilder:
         self.books = []
 
     def __repr__(self):
-        return 'TextStripper(text=%s)' % self.text
+        return "GutenbergListBuilder(text={}}, unknown_threshold={} ,file_name={})".format(
+            self.text,
+            self.unknown_threshold,
+            self.file_name
+        )
 
     def __str__(self):
         return self.__repr__()
