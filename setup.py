@@ -7,6 +7,7 @@ import requests
 import gutenberg_list_builder
 import text_stripper
 import time
+import word_descriptor
 from multiprocessing import Process, Queue
 
 
@@ -23,15 +24,15 @@ def download_and_parse_books(q_in, q_out, num):
 
 
 def write_output(outfile_name, words):
-    unique = 0
-    occurrences = 0
+    unique_words = 0
+    total_occurrences = 0
     with open(outfile_name, "w") as outfile:
         outfile.write("word,books,occurrences")
         for word in words.keys():
-            outfile.write("\n{},{},{}".format(words[word]["word"], words[word]["books"], words[word]["count"]))
-            unique += 1
-            occurrences += words[word]["count"]
-    return unique, occurrences
+            outfile.write("\n{},{},{}".format(words[word].word, words[word].sources, words[word].occurrences))
+            unique_words += 1
+            total_occurrences += words[word].occurrences
+    return unique_words, total_occurrences
 
 
 def words_from_book(book_text=""):
@@ -39,17 +40,16 @@ def words_from_book(book_text=""):
     for word in book_text.split():
         word = word.lower()
         if word not in words.keys():
-            words[word] = {"word": word, "books": 1, "count": 1}
+            words[word] = word_descriptor.WordDescriptor(word, 1, 1)
         else:
-            words[word]["count"] += 1
+            words[word].occurrences += 1
     return words
 
 
 def merge_word_dict_into(target, source):
     for word in source.keys():
         if word in target.keys():
-            target[word]["books"] += 1
-            target[word]["count"] += source[word]["count"]
+            target[word].merge(source[word])
         else:
             target[word] = source[word]
     return target
@@ -62,40 +62,17 @@ def remove_pattern_dir():
         shutil.rmtree(patterns_dir)
 
 
-def build_word_pattern(word):
-    """Given a word descriptor, calculate the word pattern and the number of unique character is has."""
-    pattern = ""
-    unique = 0
-    char_map = {}
-    alphabet = "abcdefghijklmnopqrstuvwxyz"
-    for char in word["word"]:
-        if char in ['\'', '-']:
-            pattern += char
-        else:
-            if char not in char_map.keys():
-                char_map[char] = unique
-                unique += 1
-            pattern += alphabet[char_map[char]]
-    return {
-        "pattern": pattern,
-        "word": word["word"],
-        "unique": unique,
-        "books": word["books"],
-        "occurrences": word["occurrences"]
-    }
-
-
 def build_pattern_map(wordlist):
     patterns = {}
-    for word in wordlist:
-        descriptor = build_word_pattern(word)
-        if len(word["word"]) not in patterns.keys():
-            patterns[len(word["word"])] = {}
-        if descriptor["unique"] not in patterns[len(word["word"])]:
-            patterns[len(word["word"])][descriptor["unique"]] = {}
-        if descriptor["pattern"] not in patterns[len(word["word"])][descriptor["unique"]]:
-            patterns[len(word["word"])][descriptor["unique"]][descriptor["pattern"]] = []
-        patterns[len(word["word"])][descriptor["unique"]][descriptor["pattern"]].append(descriptor)
+    for word_name in wordlist.keys():
+        word = wordlist[word_name]
+        if len(word) not in patterns.keys():
+            patterns[len(word)] = {}
+        if word.unique not in patterns[len(word)]:
+            patterns[len(word)][word.unique] = {}
+        if word.pattern not in patterns[len(word)][word.unique]:
+            patterns[len(word)][word.unique][word.pattern] = []
+        patterns[len(word)][word.unique][word.pattern].append(word.dictionary())
     return patterns
 
 
@@ -105,7 +82,8 @@ def build_pattern_map_directories(patterns):
     if not os.path.exists(patterns_dir):
         os.mkdir(patterns_dir)
     for word_length in patterns.keys():
-        os.mkdir(os.path.join(patterns_dir, str(word_length)))
+        word_length_dir = os.path.join(patterns_dir, str(word_length))
+        os.mkdir(os.path.join(word_length_dir))
 
 
 def save_pattern_map(patterns):
@@ -167,7 +145,7 @@ def main():
     except queue.Empty:
         print("\n[!] Queue empty!")
     except Exception as e:
-        print("\n[!] Error while counting and merging words! {}".format(e))
+        print("\n[!] Error while counting and merging words: {}!".format(e))
     print("[+] Writing results.")
     unique, occurrences = write_output(outfile_name, words)
     print("[+] Classified {} occurrences of {} unique words from {} books.".format(occurrences, unique, books_count))
