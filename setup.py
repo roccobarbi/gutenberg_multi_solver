@@ -4,10 +4,9 @@ import os
 import queue
 import shutil
 import requests
-import gutenberg_list_builder
-import text_stripper
+from utils import text_stripper, gutenberg_list_builder
 import time
-from word_descriptor import WordDescriptor
+from utils.word_descriptor import WordDescriptor
 from multiprocessing import Process, Queue
 
 
