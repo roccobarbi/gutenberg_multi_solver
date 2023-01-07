@@ -37,7 +37,7 @@ class WordDescriptor:
                 self.pattern += alphabet[char_map[char]]
 
     def __repr__(self):
-        return "WordDescriptor(words={}, sources={}, occurrences={})".format(
+        return "WordDescriptor(word={}, sources={}, occurrences={})".format(
             self.word,
             self.sources,
             self.occurrences
